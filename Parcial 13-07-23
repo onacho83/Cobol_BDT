@@ -1,0 +1,151 @@
+      ******************************************************************
+      * Author:
+      * Date:
+      * Purpose:
+      * Tectonics: cobc
+      ******************************************************************
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. YOUR-PROGRAM-NAME.
+       ENVIRONMENT DIVISION.
+       CONFIGURATION SECTION.
+       SPECIAL-NAMES. DECIMAL-POINT IS COMMA.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT CUOTAS ASSIGN TO '../cuotas.dat'
+               ORGANIZATION IS INDEXED
+               ACCESS MODE IS DYNAMIC
+               RECORD KEY IS CUO-RECIBO
+               ALTERNATE KEY IS CUO-PASAJERO WITH DUPLICATES.
+
+           SELECT PASAJEROS ASSIGN TO '../pasajeros.dat'
+               ORGANIZATION IS INDEXED
+               ACCESS MODE IS DYNAMIC
+               RECORD KEY IS PAS-CLAVE.
+
+
+
+       DATA DIVISION.
+       FILE SECTION.
+
+       FD  CUOTAS.
+       01  CUOTA-REG.
+           03 CUO-RECIBO PIC 9(10).
+           03 CUO-PASAJERO PIC 9(5).
+           03 CUO-FECHA PIC 9(8).
+           03 CUO-IMPORTE PIC 9(8).
+
+       FD  PASAJEROS.
+       01  PAS-REG.
+           03 PAS-CLAVE.
+               05 PAS-PASAJERO PIC 9(5).
+               05 PAS-MES PIC 99.
+           03 PAS-ESTADO PIC A.
+           03 PAS-CUOTA PIC 9(6).
+           03 PAS-PAGADO PIC 9(6).
+           03 PAS-DEBE PIC 9(6).
+
+
+
+
+       WORKING-STORAGE SECTION.
+
+       01  VEC-MES-IMPORTE OCCURS 12 TIMES.
+           03 VEC-IMPORTE PIC 9(6).
+
+       77  I PIC 99.
+       77  WSS-IMPORTE-VEC PIC 9(6) VALUE 600.
+
+       77  WSS-CUOTA-EOF PIC 9.
+       77  WSS-PAS-ANT PIC  9(5).
+       77  WSS-SALDO PIC 9(6).
+       77  WSS-PASAJEROS-EOF PIC 9.
+       77  MES-PROCESADO PIC 99.
+
+       PROCEDURE DIVISION.
+       MAIN-PROCEDURE.
+
+            PERFORM 1000-INICIO-GENERAL.
+            PERFORM 2000-BUSCAR-CUOTA.
+            PERFORM UNTIL WSS-CUOTA-EOF = 1
+                         OR CUO-PASAJERO <> WSS-PAS-ANT
+                 PERFORM 3000-INICIO-PASAJERO
+                 PERFORM 4000-BUSCAR-PASAJERO
+
+                         IF PAS-ESTADO = "C"
+                           DISPLAY " VIAJE PAGADO "
+                           MOVE 0 TO WSS-SALDO
+                         ELSE
+                            PERFORM 4500-PROCESAR-CUOTAS-IMPAGAS
+
+                         END-IF
+
+                 PERFORM 2050-LEER-CUOTA
+            END-PERFORM
+            PERFORM 6000-FIN-GENERAL.
+
+            STOP RUN.
+
+       1000-INICIO-GENERAL.
+           PERFORM 1100-CARGO-VECTOR-IMPORTE.
+           DISPLAY "Inicio Programa".
+           MOVE 0 TO CUO-PASAJERO.
+
+       1100-CARGO-VECTOR-IMPORTE.
+           PERFORM UNTIL I = 12
+               MOVE WSS-IMPORTE-VEC TO VEC-IMPORTE(1)
+               ADD 50 TO WSS-IMPORTE-VEC
+               ADD 1 TO I
+           END-PERFORM.
+
+
+       2000-BUSCAR-CUOTA.
+           START CUOTAS KEY IS > CUO-PASAJERO INVALID KEY
+                                       DISPLAY "Fin de Archivo"
+                                       MOVE 1 to WSS-CUOTA-EOF.
+
+       2050-LEER-CUOTA.
+           READ CUOTAS NEXT AT END MOVE 1 TO WSS-CUOTA-EOF.
+
+       3000-INICIO-PASAJERO.
+           MOVE CUO-PASAJERO TO WSS-PAS-ANT.
+           MOVE CUO-PASAJERO TO PAS-PASAJERO.
+           MOVE 0 TO PAS-MES.
+
+
+       4000-BUSCAR-PASAJERO.
+           READ PASAJEROS INVALID KEY DISPLAY "PASAJERO NO ENCONTRADO"
+                               MOVE 1 TO WSS-PASAJEROS-EOF.
+
+       4500-PROCESAR-CUOTAS-IMPAGAS.
+
+           perform 4550-START-CUOTA-PAS.
+           PERFORM 4555-LEER-CUOTA-PAS.
+
+           PERFORM UNTIL WSS-PASAJEROS-EOF = 1
+                         OR PAS-PASAJERO <> WSS-PAS-ANT
+                         OR WSS-SALDO = 0
+
+                          IF PAS-ESTADO = "A"
+                             MOVE VEC-IMPORTE(PAS-MES) TO PAS-CUOTA
+                             IF CUO-IMPORTE > PAS-CUOTA
+                               SUBTRACT PAS-CUOTA FROM CUO-IMPORTE
+                               MOVE 0 TO PAS-DEBE
+                               MOVE "C" TO PAS-ESTADO
+
+                          END-IF
+           END-PERFORM.
+
+       4550-START-CUOTA-PAS.
+           START PASAJEROS KEY IS > PAS-CLAVE INVALID KEY
+                                       DISPLAY "Fin de Archivo"
+                                       MOVE 1 to WSS-PASAJEROS-EOF.
+
+       4555-LEER-CUOTA-PAS.
+           READ PASAJEROS NEXT AT END MOVE 1 TO WSS-CUOTA-EOF.
+
+
+
+
+       6000-FIN-GENERAL.
+
+       END PROGRAM YOUR-PROGRAM-NAME.
